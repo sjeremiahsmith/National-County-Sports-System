@@ -1,239 +1,178 @@
-Dompdf
-======
+[![Latest Stable Version](https://poser.pugx.org/thecodingmachine/safe/v/stable.svg)](https://packagist.org/packages/thecodingmachine/safe)
+[![Total Downloads](https://poser.pugx.org/thecodingmachine/safe/downloads.svg)](https://packagist.org/packages/thecodingmachine/safe)
+[![Latest Unstable Version](https://poser.pugx.org/thecodingmachine/safe/v/unstable.svg)](https://packagist.org/packages/thecodingmachine/safe)
+[![License](https://poser.pugx.org/thecodingmachine/safe/license.svg)](https://packagist.org/packages/thecodingmachine/safe)
+[![Build Status](https://travis-ci.org/thecodingmachine/safe.svg?branch=master)](https://travis-ci.org/thecodingmachine/safe)
+[![Continuous Integration](https://github.com/thecodingmachine/safe/workflows/Continuous%20Integration/badge.svg)](https://github.com/thecodingmachine/safe/actions)
+[![codecov](https://codecov.io/gh/thecodingmachine/safe/branch/master/graph/badge.svg)](https://codecov.io/gh/thecodingmachine/safe)
 
-[![Build Status](https://github.com/dompdf/dompdf/actions/workflows/test.yml/badge.svg)](https://github.com/dompdf/dompdf/actions/workflows/test.yml)
-[![PHP Versions Supported](https://poser.pugx.org/dompdf/dompdf/require/php)](https://packagist.org/packages/dompdf/dompdf)
-[![Latest Release](https://poser.pugx.org/dompdf/dompdf/v)](https://packagist.org/packages/dompdf/dompdf)
-[![Total Downloads](https://poser.pugx.org/dompdf/dompdf/downloads)](https://packagist.org/packages/dompdf/dompdf)
-[![License](https://poser.pugx.org/dompdf/dompdf/license)](https://packagist.org/packages/dompdf/dompdf)
- 
-**Dompdf is an HTML to PDF converter**
+Safe PHP
+========
 
-At its heart, dompdf is (mostly) a [CSS 2.1](http://www.w3.org/TR/CSS2/) compliant
-HTML layout and rendering engine written in PHP. It is a style-driven renderer:
-it will download and read external stylesheets, inline style tags, and the style
-attributes of individual HTML elements. It also supports most presentational
-HTML attributes.
+**Work in progress**
 
-*This document applies to the latest stable code which may not reflect the current 
-release. For released code please
-[navigate to the appropriate tag](https://github.com/dompdf/dompdf/tags).*
+A set of core PHP functions rewritten to throw exceptions instead of returning `false` when an error is encountered.
 
-----
+## The problem
 
-**Check out the [demo](http://eclecticgeek.com/dompdf/debug.php) and ask any
-question on [StackOverflow](https://stackoverflow.com/questions/tagged/dompdf) or
-in [Discussions](https://github.com/dompdf/dompdf/discussions).**
+Most PHP core functions were written before exception handling was added to the language. Therefore, most PHP functions
+do not throw exceptions. Instead, they return `false` in case of error.
 
-Follow us on [![Twitter](http://twitter-badges.s3.amazonaws.com/twitter-a.png)](http://www.twitter.com/dompdf).
+But most of us are too lazy to check explicitly for every single return of every core PHP function.
 
----
+```php
+// This code is incorrect. Twice.
+// "file_get_contents" can return false if the file does not exists
+// "json_decode" can return false if the file content is not valid JSON
+$content = file_get_contents('foobar.json');
+$foobar = json_decode($content);
+```
 
+The correct version of this code would be:
 
+```php
+$content = file_get_contents('foobar.json');
+if ($content === false) {
+    throw new FileLoadingException('Could not load file foobar.json');
+}
+$foobar = json_decode($content);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    throw new FileLoadingException('foobar.json does not contain valid JSON: '.json_last_error_msg());
+}
+```
 
-## Features
+Obviously, while this snippet is correct, it is less easy to read.
 
- * Handles most CSS 2.1 and a few CSS3 properties, including @import, @media &
-   @page rules
- * Supports most presentational HTML 4.0 attributes
- * Supports external stylesheets, either local or through http/ftp (via
-   fopen-wrappers)
- * Supports complex tables, including row & column spans, separate & collapsed
-   border models, individual cell styling
- * Image support (gif, png (8, 24 and 32 bit with alpha channel), bmp & jpeg)
- * No dependencies on external PDF libraries, thanks to the R&OS PDF class
- * Inline PHP support
- * Basic SVG support (see "Limitations" below)
- 
-## Requirements
+## The solution
 
- * PHP version 7.1 or higher
- * DOM extension
- * MBString extension
- * php-font-lib
- * php-svg-lib
- 
-Note that some required dependencies may have further dependencies 
-(notably php-svg-lib requires sabberworm/php-css-parser).
+Enter *thecodingmachine/safe* aka Safe-PHP.
 
-### Recommendations
+Safe-PHP redeclares all core PHP functions. The new PHP functions act exactly as the old ones, except they
+throw exceptions properly when an error is encountered. The "safe" functions have the same name as the core PHP
+functions, except they are in the `Safe` namespace.
 
- * GD (for image processing)
-   * Additionally, the IMagick or GMagick extension improves image processing performance for certain image types
- * OPcache (OPcache, XCache, APC, etc.): improves performance
+```php
+use function Safe\file_get_contents;
+use function Safe\json_decode;
 
-Visit the wiki for more information:
-https://github.com/dompdf/dompdf/wiki/Requirements
+// This code is both safe and simple!
+$content = file_get_contents('foobar.json');
+$foobar = json_decode($content);
+```
 
-## About Fonts & Character Encoding
+All PHP functions that can return `false` on error are part of Safe.
+In addition, Safe also provide 2 'Safe' classes: `Safe\DateTime` and `Safe\DateTimeImmutable` whose methods will throw exceptions instead of returning false.
 
-PDF documents internally support the following fonts: Helvetica, Times-Roman,
-Courier, Zapf-Dingbats, & Symbol. These fonts only support Windows ANSI
-encoding. In order for a PDF to display characters that are not available in
-Windows ANSI, you must supply an external font. Dompdf will embed any referenced
-font in the PDF so long as it has been pre-loaded or is accessible to dompdf and
-reference in CSS @font-face rules. See the
-[font overview](https://github.com/dompdf/dompdf/wiki/About-Fonts-and-Character-Encoding)
-for more information on how to use fonts.
+## PHPStan integration
 
-The [DejaVu TrueType fonts](https://dejavu-fonts.github.io/) have been pre-installed
-to give dompdf decent Unicode character coverage by default. To use the DejaVu
-fonts reference the font in your stylesheet, e.g. `body { font-family: DejaVu
-Sans; }` (for DejaVu Sans). The following DejaVu 2.34 fonts are available:
-DejaVu Sans, DejaVu Serif, and DejaVu Sans Mono.
+> Yeah... but I must explicitly think about importing the "safe" variant of the function, for each and every file of my application.
+> I'm sure I will forget some "use function" statements!
 
-## Easy Installation
+Fear not! thecodingmachine/safe comes with a PHPStan rule.
 
-### Install with composer
+Never heard of [PHPStan](https://github.com/phpstan/phpstan) before?
+Check it out, it's an amazing code analyzer for PHP.
 
-To install with [Composer](https://getcomposer.org/), simply require the
-latest version of this package.
+Simply install the Safe rule in your PHPStan setup (explained in the "Installation" section) and PHPStan will let you know each time you are using an "unsafe" function.
+
+The code below will trigger this warning:
+
+```php
+$content = file_get_contents('foobar.json');
+```
+
+> Function file_get_contents is unsafe to use. It can return FALSE instead of throwing an exception. Please add 'use function Safe\\file_get_contents;' at the beginning of the file to use the variant provided by the 'thecodingmachine/safe' library.
+
+## Installation
+
+Use composer to install Safe-PHP:
 
 ```bash
-composer require dompdf/dompdf
+$ composer require thecodingmachine/safe
 ```
 
-Make sure that the autoload file from Composer is loaded.
+*Highly recommended*: install PHPStan and PHPStan extension:
+
+```bash
+$ composer require --dev thecodingmachine/phpstan-safe-rule
+```
+
+Now, edit your `phpstan.neon` file and add these rules:
+
+```yml
+includes:
+    - vendor/thecodingmachine/phpstan-safe-rule/phpstan-safe-rule.neon
+```
+
+## Automated refactoring
+
+You have a large legacy codebase and want to use "Safe-PHP" functions throughout your project? PHPStan will help you
+find these functions but changing the namespace of the functions one function at a time might be a tedious task.
+
+Fortunately, Safe comes bundled with a "Rector" configuration file. [Rector](https://github.com/rectorphp/rector) is a command-line
+tool that performs instant refactoring of your application.
+
+Run
+
+```bash
+$ composer require --dev rector/rector:^0.7
+```
+
+to install `rector/rector`.
+
+Run
+
+```bash
+vendor/bin/rector process src/ --config vendor/thecodingmachine/safe/rector-migrate-0.7.php
+```
+
+to run `rector/rector`.
+
+*Note:* do not forget to replace "src/" with the path to your source directory.
+
+**Important:** the refactoring only performs a "dumb" replacement of functions. It will not modify the way
+"false" return values are handled. So if your code was already performing error handling, you will have to deal
+with it manually.
+
+Especially, you should look for error handling that was already performed, like:
 
 ```php
-// somewhere early in your project's loading, require the Composer autoloader
-// see: http://getcomposer.org/doc/00-intro.md
-require 'vendor/autoload.php';
+if (!mkdir($dirPath)) {
+    // Do something on error
+}
 ```
 
-### Download and install
-
-Download a packaged archive of dompdf and extract it into the 
-directory where dompdf will reside
-
- * You can download stable copies of dompdf from
-   https://github.com/dompdf/dompdf/releases
- * Or download a nightly (the latest, unreleased code) from
-   http://eclecticgeek.com/dompdf
-
-Use the packaged release autoloader to load dompdf, libraries,
-and helper functions in your PHP:
+This code will be refactored by Rector to:
 
 ```php
-// include autoloader
-require_once 'dompdf/autoload.inc.php';
+if (!\Safe\mkdir($dirPath)) {
+    // Do something on error
+}
 ```
 
-Note: packaged releases are named according using semantic
-versioning (_dompdf_MAJOR-MINOR-PATCH.zip_). So the 1.0.0 
-release would be dompdf_1-0-0.zip. This is the only download
-that includes the autoloader for Dompdf and all its dependencies.
-
-### Install with git
-
-From the command line, switch to the directory where dompdf will
-reside and run the following commands:
-
-```sh
-git clone https://github.com/dompdf/dompdf.git
-cd dompdf/lib
-
-git clone https://github.com/PhenX/php-font-lib.git php-font-lib
-cd php-font-lib
-git checkout 0.5.1
-cd ..
-
-git clone https://github.com/PhenX/php-svg-lib.git php-svg-lib
-cd php-svg-lib
-git checkout v0.3.2
-cd ..
-
-git clone https://github.com/sabberworm/PHP-CSS-Parser.git php-css-parser
-cd php-css-parser
-git checkout 8.1.0
-```
-
-Require dompdf and it's dependencies in your PHP.
-For details see the [autoloader in the utils project](https://github.com/dompdf/utils/blob/master/autoload.inc.php).
-
-## Framework Integration
-
-* For Symfony: [nucleos/dompdf-bundle](https://github.com/nucleos/NucleosDompdfBundle)
-* For Laravel: [barryvdh/laravel-dompdf](https://github.com/barryvdh/laravel-dompdf)
-* For Redaxo: [PdfOut](https://github.com/FriendsOfREDAXO/pdfout)
-
-## Quick Start
-
-Just pass your HTML in to dompdf and stream the output:
+You should then (manually) refactor it to:
 
 ```php
-// reference the Dompdf namespace
-use Dompdf\Dompdf;
-
-// instantiate and use the dompdf class
-$dompdf = new Dompdf();
-$dompdf->loadHtml('hello world');
-
-// (Optional) Setup the paper size and orientation
-$dompdf->setPaper('A4', 'landscape');
-
-// Render the HTML as PDF
-$dompdf->render();
-
-// Output the generated PDF to Browser
-$dompdf->stream();
+try {
+    \Safe\mkdir($dirPath));
+} catch (\Safe\FilesystemException $e) {
+    // Do something on error
+}
 ```
 
-### Setting Options
+## Performance impact
 
-Set options during dompdf instantiation:
+Safe is loading 1000+ functions from ~85 files on each request. Yet, the performance impact of this loading is quite low.
 
-```php
-use Dompdf\Dompdf;
-use Dompdf\Options;
+In case you worry, using Safe will "cost" you ~700µs on each request. The [performance section](performance/README.md)
+contains more information regarding the way we tested the performance impact of Safe.
 
-$options = new Options();
-$options->set('defaultFont', 'Courier');
-$dompdf = new Dompdf($options);
-```
+## Learn more
 
-or at run time
+Read [the release article on TheCodingMachine's blog](https://thecodingmachine.io/introducing-safe-php) if you want to
+learn more about what triggered the development of Safe-PHP.
 
-```php
-use Dompdf\Dompdf;
+## Contributing
 
-$dompdf = new Dompdf();
-$options = $dompdf->getOptions();
-$options->setDefaultFont('Courier');
-$dompdf->setOptions($options);
-```
-
-See [Dompdf\Options](src/Options.php) for a list of available options.
-
-### Resource Reference Requirements
-
-In order to protect potentially sensitive information Dompdf imposes 
-restrictions on files referenced from the local file system or the web. 
-
-Files accessed through web-based protocols have the following requirements:
- * The Dompdf option "isRemoteEnabled" must be set to "true"
- * PHP must either have the curl extension enabled or the 
-   allow_url_fopen setting set to true
-   
-Files accessed through the local file system have the following requirement:
- * The file must fall within the path(s) specified for the Dompdf "chroot" option
-
-## Limitations (Known Issues)
-
- * Table cells are not pageable, meaning a table row must fit on a single page: See https://github.com/dompdf/dompdf/issues/98
- * Elements are rendered on the active page when they are parsed.
- * Embedding "raw" SVG's (`<svg><path...></svg>`) isn't working yet: See https://github.com/dompdf/dompdf/issues/320  
-   Workaround: Either link to an external SVG file, or use a DataURI like this:
-     ```php
-     $html = '<img src="data:image/svg+xml;base64,' . base64_encode($svg) . '">';
-     ```
- * Does not support CSS flexbox: See https://github.com/dompdf/dompdf/issues/971
- * Does not support CSS Grid: See https://github.com/dompdf/dompdf/issues/2988
- * A single Dompdf instance should not be used to render more than one HTML document
-   because persisted parsing and rendering artifacts can impact future renders.
----
-
-[![Donate button](https://www.paypal.com/en_US/i/btn/btn_donate_SM.gif)](http://goo.gl/DSvWf)
-
-*If you find this project useful, please consider making a donation.
-Any funds donated will be used to help further development on this project.)*
+The files that contain all the functions are auto-generated from the PHP doc.
+Read the [CONTRIBUTING.md](CONTRIBUTING.md) file to learn how to regenerate these files and to contribute to this library.
